@@ -410,8 +410,9 @@ function exportarCSV() {
     link.click();
     document.body.removeChild(link);
 }
-const GEMINI_API_KEY = "AQ.Ab8RN6J_ljhQCW7vo89HOE70Z96gTiRHM8I2EB-V12yec-GV2g"; // Pode utilizar a sua chave da API Gemini
-
+// ==========================================
+// 5. LEITURA DE COMPROVANTES VIA IA (OCR / GEMINI API)
+// ==========================================
 const inputFotoOcr = document.getElementById('input-foto-ocr');
 const modalOcr = document.getElementById('modal-ocr');
 const btnFecharOcr = document.getElementById('btn-fechar-ocr');
@@ -429,15 +430,29 @@ if (inputFotoOcr) {
         const file = e.target.files[0];
         if (!file) return;
 
+        // Recupera a chave salva ou solicita ao usuário
+        let apiKey = localStorage.getItem('GEMINI_API_KEY');
+        if (!apiKey) {
+            apiKey = prompt("AQ.Ab8RN6JSsmz5DspV9vawQmdDLwl70Nbrzpb5GomLRD_0I2c8Vg");
+            if (apiKey) {
+                localStorage.setItem('GEMINI_API_KEY', apiKey);
+            } else {
+                alert("A chave da API é necessária para utilizar o leitor via IA.");
+                return;
+            }
+        }
+
         modalOcr.style.display = 'flex';
         statusOcr.style.display = 'block';
         conteudoOcr.style.display = 'none';
 
         try {
             const base64Data = await converterArquivoParaBase64(file);
-            const mimeType = file.type;
+            const mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
 
-            const resultadoJson = await analisarComprovanteComGemini(base64Data, mimeType);
+            console.log("Enviando arquivo para o Gemini...", { mimeType, tamanho: file.size });
+
+            const resultadoJson = await analisarComprovanteComGemini(base64Data, mimeType, apiKey);
             itensExtraidosOcr = resultadoJson.itens || [];
 
             renderizarItensOcr(resultadoJson);
@@ -445,8 +460,11 @@ if (inputFotoOcr) {
             statusOcr.style.display = 'none';
             conteudoOcr.style.display = 'block';
         } catch (err) {
-            alert('Erro ao analisar o documento com a IA: ' + err.message);
+            console.error("Erro na leitura OCR:", err);
+            alert('Erro ao analisar o documento: ' + err.message);
             modalOcr.style.display = 'none';
+        } finally {
+            inputFotoOcr.value = ''; // Reseta o input de arquivo
         }
     });
 }
@@ -454,28 +472,32 @@ if (inputFotoOcr) {
 function converterArquivoParaBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onload = () => {
+            const result = reader.result;
+            const base64Clean = result.substring(result.indexOf(',') + 1);
+            resolve(base64Clean);
+        };
         reader.onerror = error => reject(error);
         reader.readAsDataURL(file);
     });
 }
 
-async function analisarComprovanteComGemini(base64Data, mimeType) {
-    const prompt = `Analise este comprovante/nota fiscal/documento e retorne ESTRITAMENTE um objeto JSON válido (sem marcação de código markdown tipo \`\`\`json) com a seguinte estrutura:
-    {
-        "data": "YYYY-MM-DD",
-        "descricaoGeral": "Nome do Estabelecimento ou Titulo do Holerite",
-        "itens": [
-            { "descricao": "Nome do Produto/Item", "valor": 0.00 }
-        ]
-    }`;
+async function analisarComprovanteComGemini(base64Data, mimeType, apiKey) {
+    const promptText = `Analise este comprovante/nota fiscal/documento e retorne ESTRITAMENTE um objeto JSON válido (sem formatação markdown, sem \`\`\`json) com esta estrutura exata:
+{
+    "data": "YYYY-MM-DD",
+    "descricaoGeral": "Nome do Estabelecimento ou Holerite",
+    "itens": [
+        { "descricao": "Nome do produto ou item", "valor": 0.00 }
+    ]
+}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const payload = {
         contents: [{
             parts: [
-                { text: prompt },
+                { text: promptText },
                 { inline_data: { mime_type: mimeType, data: base64Data } }
             ]
         }]
@@ -487,27 +509,46 @@ async function analisarComprovanteComGemini(base64Data, mimeType) {
         body: JSON.stringify(payload)
     });
 
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `Erro HTTP ${response.status}`);
+    }
+
     const data = await response.json();
-    const textoResposta = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(textoResposta);
+    
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+        throw new Error("Resposta inválida da IA.");
+    }
+
+    let rawText = data.candidates[0].content.parts[0].text;
+    
+    // Sanitização do JSON retornado
+    rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    
+    return JSON.parse(rawText);
 }
 
 function renderizarItensOcr(dados) {
     listaItensOcr.innerHTML = `
-        <div style="margin-bottom: 10px; font-weight: bold; color: #1e293b;">
-            📍 ${dados.descricaoGeral || 'Comprovante'} - ${dados.data || 'Data não identificada'}
+        <div style="margin-bottom: 12px; padding: 8px; background: #e2e8f0; border-radius: 6px; font-weight: bold; color: #1e293b;">
+            📍 ${dados.descricaoGeral || 'Comprovante'} | Data: ${dados.data || 'Não identificada'}
         </div>
     `;
+
+    if (!dados.itens || dados.itens.length === 0) {
+        listaItensOcr.innerHTML += `<p style="color: #ef4444;">Nenhum item individual foi identificado no documento.</p>`;
+        return;
+    }
 
     dados.itens.forEach((item, index) => {
         const divItem = document.createElement('div');
         divItem.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 8px;";
         divItem.innerHTML = `
-            <div style="display: flex; justify-content: space-between; font-weight: 600;">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; color: #0f172a;">
                 <span>${item.descricao}</span>
                 <span>R$ ${parseFloat(item.valor).toFixed(2)}</span>
             </div>
-            <div style="display: flex; gap: 10px; font-size: 0.85rem; margin-top: 4px;">
+            <div style="display: flex; gap: 12px; font-size: 0.85rem; margin-top: 4px; color: #475569;">
                 <label><input type="radio" name="divisao_ocr_${index}" value="MeioAMeio" checked> ⚖️ Meio a Meio</label>
                 <label><input type="radio" name="divisao_ocr_${index}" value="Sil"> 👩 Sil</label>
                 <label><input type="radio" name="divisao_ocr_${index}" value="Charles"> 👨 Charles</label>
@@ -522,7 +563,8 @@ if (btnConfirmarOcr) {
         const hojeStr = document.getElementById('data').value || new Date().toISOString().split('T')[0];
         
         itensExtraidosOcr.forEach((item, index) => {
-            const formaDivisao = document.querySelector(`input[name="divisao_ocr_${index}"]:checked`).value;
+            const radChecked = document.querySelector(`input[name="divisao_ocr_${index}"]:checked`);
+            const formaDivisao = radChecked ? radChecked.value : 'MeioAMeio';
             const { parteSil, parteCharles } = calcularDivisao(item.valor, 0, formaDivisao);
 
             db.collection("lancamentos").add({
@@ -541,6 +583,6 @@ if (btnConfirmarOcr) {
         });
 
         modalOcr.style.display = 'none';
-        alert('Lançamentos importados com sucesso!');
+        alert('Lançamentos importados com sucesso para o banco!');
     });
 }

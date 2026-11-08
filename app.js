@@ -410,3 +410,137 @@ function exportarCSV() {
     link.click();
     document.body.removeChild(link);
 }
+const GEMINI_API_KEY = "AQ.Ab8RN6J_ljhQCW7vo89HOE70Z96gTiRHM8I2EB-V12yec-GV2g"; // Pode utilizar a sua chave da API Gemini
+
+const inputFotoOcr = document.getElementById('input-foto-ocr');
+const modalOcr = document.getElementById('modal-ocr');
+const btnFecharOcr = document.getElementById('btn-fechar-ocr');
+const statusOcr = document.getElementById('status-processando-ocr');
+const conteudoOcr = document.getElementById('conteudo-resultado-ocr');
+const listaItensOcr = document.getElementById('lista-itens-ocr');
+const btnConfirmarOcr = document.getElementById('btn-confirmar-ocr');
+
+let itensExtraidosOcr = [];
+
+if (btnFecharOcr) btnFecharOcr.addEventListener('click', () => modalOcr.style.display = 'none');
+
+if (inputFotoOcr) {
+    inputFotoOcr.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        modalOcr.style.display = 'flex';
+        statusOcr.style.display = 'block';
+        conteudoOcr.style.display = 'none';
+
+        try {
+            const base64Data = await converterArquivoParaBase64(file);
+            const mimeType = file.type;
+
+            const resultadoJson = await analisarComprovanteComGemini(base64Data, mimeType);
+            itensExtraidosOcr = resultadoJson.itens || [];
+
+            renderizarItensOcr(resultadoJson);
+
+            statusOcr.style.display = 'none';
+            conteudoOcr.style.display = 'block';
+        } catch (err) {
+            alert('Erro ao analisar o documento com a IA: ' + err.message);
+            modalOcr.style.display = 'none';
+        }
+    });
+}
+
+function converterArquivoParaBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function analisarComprovanteComGemini(base64Data, mimeType) {
+    const prompt = `Analise este comprovante/nota fiscal/documento e retorne ESTRITAMENTE um objeto JSON válido (sem marcação de código markdown tipo \`\`\`json) com a seguinte estrutura:
+    {
+        "data": "YYYY-MM-DD",
+        "descricaoGeral": "Nome do Estabelecimento ou Titulo do Holerite",
+        "itens": [
+            { "descricao": "Nome do Produto/Item", "valor": 0.00 }
+        ]
+    }`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const payload = {
+        contents: [{
+            parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+        }]
+    };
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    const textoResposta = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(textoResposta);
+}
+
+function renderizarItensOcr(dados) {
+    listaItensOcr.innerHTML = `
+        <div style="margin-bottom: 10px; font-weight: bold; color: #1e293b;">
+            📍 ${dados.descricaoGeral || 'Comprovante'} - ${dados.data || 'Data não identificada'}
+        </div>
+    `;
+
+    dados.itens.forEach((item, index) => {
+        const divItem = document.createElement('div');
+        divItem.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 8px;";
+        divItem.innerHTML = `
+            <div style="display: flex; justify-content: space-between; font-weight: 600;">
+                <span>${item.descricao}</span>
+                <span>R$ ${parseFloat(item.valor).toFixed(2)}</span>
+            </div>
+            <div style="display: flex; gap: 10px; font-size: 0.85rem; margin-top: 4px;">
+                <label><input type="radio" name="divisao_ocr_${index}" value="MeioAMeio" checked> ⚖️ Meio a Meio</label>
+                <label><input type="radio" name="divisao_ocr_${index}" value="Sil"> 👩 Sil</label>
+                <label><input type="radio" name="divisao_ocr_${index}" value="Charles"> 👨 Charles</label>
+            </div>
+        `;
+        listaItensOcr.appendChild(divItem);
+    });
+}
+
+if (btnConfirmarOcr) {
+    btnConfirmarOcr.addEventListener('click', () => {
+        const hojeStr = document.getElementById('data').value || new Date().toISOString().split('T')[0];
+        
+        itensExtraidosOcr.forEach((item, index) => {
+            const formaDivisao = document.querySelector(`input[name="divisao_ocr_${index}"]:checked`).value;
+            const { parteSil, parteCharles } = calcularDivisao(item.valor, 0, formaDivisao);
+
+            db.collection("lancamentos").add({
+                id: Date.now() + index,
+                data: hojeStr,
+                descricao: item.descricao,
+                categoria: "🛒 Mercado",
+                valorTotal: item.valor,
+                valorBebidas: 0,
+                pagoPor: "Charles",
+                formaDivisao,
+                parteSil,
+                parteCharles,
+                isRecorrente: false
+            });
+        });
+
+        modalOcr.style.display = 'none';
+        alert('Lançamentos importados com sucesso!');
+    });
+}

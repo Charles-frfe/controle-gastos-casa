@@ -1,5 +1,5 @@
 // ==========================================
-// 1. CONFIGURAÇÃO E CONEXÃO COM O FIREBASE
+// 1. CONEXÃO COM O FIREBASE
 // ==========================================
 const firebaseConfig = {
     apiKey: "AIzaSyAT7PBkkTXOcyrQnMW_GMOu-5lWKHvKknU",
@@ -11,23 +11,30 @@ const firebaseConfig = {
     measurementId: "G-LB42905Q66"
 };
 
-// Inicializa o Firebase e o banco Firestore
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 let lancamentos = [];
+let receitas = [];
+let categorias = [];
 let meuGrafico = null;
 
-// ==========================================
-// GERENCIADOR DE CATEGORIAS DINÂMICAS
-// ==========================================
-let categorias = [];
 const categoriasPadrao = [
     "🛒 Mercado", "🐱 Gatas", "💊 Farmácia", "🚗 Uber / Transportes", 
     "🎉 Extra / Lazer", "💡 Água + Luz", "🌐 Internet", "📱 Vivo / Telefonia", 
     "🚘 Carro", "📺 Streamings", "🏠 Invest. Cons. Casa", 
     "🚗 Invest. Cons. Carro", "🛡️ Reserva"
 ];
+
+// Preenche a data de hoje
+document.getElementById('data').valueAsDate = new Date();
+
+const form = document.getElementById('form-gastos');
+const formReceita = document.getElementById('form-receita');
+const tabelaBody = document.getElementById('tabela-gastos-body');
+const filtroMesAno = document.getElementById('filtro-mes-ano');
+const btnMesAtual = document.getElementById('btn-mes-atual');
+const btnExportar = document.getElementById('btn-exportar');
 
 const selectCategoria = document.getElementById('categoria');
 const modalCat = document.getElementById('modal-categorias');
@@ -36,14 +43,35 @@ const btnCloseModalCat = document.getElementById('btn-fechar-modal-cat');
 const formNovaCat = document.getElementById('form-nova-categoria');
 const listaCatModal = document.getElementById('lista-categorias-modal');
 
-// Escuta a coleção de categorias no Firebase
+// ==========================================
+// 2. ESCUTAS EM TEMPO REAL (FIREBASE)
+// ==========================================
+
+// Lançamentos
+db.collection("lancamentos").onSnapshot((snapshot) => {
+    lancamentos = [];
+    snapshot.forEach((doc) => {
+        lancamentos.push({ idDoc: doc.id, ...doc.data() });
+    });
+    salvarERenderizar();
+});
+
+// Receitas
+db.collection("receitas").onSnapshot((snapshot) => {
+    receitas = [];
+    snapshot.forEach((doc) => {
+        receitas.push({ idDoc: doc.id, ...doc.data() });
+    });
+    salvarERenderizar();
+});
+
+// Categorias Dinâmicas
 db.collection("categorias").onSnapshot((snapshot) => {
     categorias = [];
     snapshot.forEach((doc) => {
         categorias.push({ idDoc: doc.id, ...doc.data() });
     });
 
-    // Se for a primeira execução e o banco estiver vazio, popula com as categorias padrão
     if (snapshot.empty) {
         categoriasPadrao.forEach(nome => {
             db.collection("categorias").add({ nome });
@@ -53,10 +81,11 @@ db.collection("categorias").onSnapshot((snapshot) => {
     }
 });
 
+// ==========================================
+// 3. GESTÃO DE CATEGORIAS
+// ==========================================
 function renderizarCategorias() {
     if (!selectCategoria) return;
-
-    // Atualiza o select do formulário
     selectCategoria.innerHTML = '';
     categorias.sort((a, b) => a.nome.localeCompare(b.nome));
 
@@ -67,7 +96,6 @@ function renderizarCategorias() {
         selectCategoria.appendChild(option);
     });
 
-    // Atualiza a lista dentro da Modal
     if (listaCatModal) {
         listaCatModal.innerHTML = '';
         categorias.forEach(cat => {
@@ -82,11 +110,9 @@ function renderizarCategorias() {
     }
 }
 
-// Abrir/Fechar Modal
 if (btnOpenModalCat) btnOpenModalCat.addEventListener('click', () => modalCat.style.display = 'flex');
 if (btnCloseModalCat) btnCloseModalCat.addEventListener('click', () => modalCat.style.display = 'none');
 
-// Adicionar Nova Categoria
 if (formNovaCat) {
     formNovaCat.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -99,52 +125,29 @@ if (formNovaCat) {
     });
 }
 
-// Excluir Categoria
 function excluirCategoria(idDoc) {
     if (confirm('Deseja excluir esta categoria?')) {
         db.collection("categorias").doc(idDoc).delete();
     }
 }
+
 // ==========================================
-// 2. ESCUTA EM TEMPO REAL (SINCRONIZAÇÃO NUVEM ↔ TELA)
+// 4. LÓGICA DE NEGÓCIO E LANÇAMENTOS
 // ==========================================
-db.collection("lancamentos").onSnapshot((snapshot) => {
-    lancamentos = [];
-    snapshot.forEach((doc) => {
-        lancamentos.push({ idDoc: doc.id, ...doc.data() });
-    });
-    salvarERenderizar();
-});
-
-// Preenche a data de hoje automaticamente no formulário
-document.getElementById('data').valueAsDate = new Date();
-
-const btnExportar = document.getElementById('btn-exportar');
-btnExportar.addEventListener('click', exportarCSV);
-
-const form = document.getElementById('form-gastos');
-const tabelaBody = document.querySelector('#tabela-gastos tbody');
-const filtroMesAno = document.getElementById('filtro-mes-ano');
-const btnMesAtual = document.getElementById('btn-mes-atual');
-
-// Definir o mês/ano atual no seletor (Formato: YYYY-MM)
 function setMesAtualFiltro() {
     const hoje = new Date();
     const ano = hoje.getFullYear();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     filtroMesAno.value = `${ano}-${mes}`;
 }
-
 setMesAtualFiltro();
 
-// Listeners de mudança no filtro
 filtroMesAno.addEventListener('change', salvarERenderizar);
 btnMesAtual.addEventListener('click', () => {
     setMesAtualFiltro();
     salvarERenderizar();
 });
 
-// Função de cálculo de rateio
 function calcularDivisao(valorTotal, valorBebidas, formaDivisao) {
     let valorLiquido = valorTotal - valorBebidas;
     let parteSil = 0;
@@ -165,7 +168,7 @@ function calcularDivisao(valorTotal, valorBebidas, formaDivisao) {
     return { parteSil, parteCharles };
 }
 
-// Salvar Lançamento (Com suporte a Parcelamento e Envio ao Firebase)
+// Submit Lançamento
 form.addEventListener('submit', (e) => {
     e.preventDefault();
 
@@ -179,8 +182,6 @@ form.addEventListener('submit', (e) => {
     const formaDivisao = document.querySelector('input[name="divisao"]:checked').value;
 
     const baseId = Date.now();
-
-    // Se for recorrente, projeta para 12 meses
     const numRepeticoes = tipoParcelamento === 'recorrente' ? 12 : parseInt(tipoParcelamento);
     const valorParcela = tipoParcelamento === 'recorrente' ? valorTotalCompra : (valorTotalCompra / numRepeticoes);
     const valorBebidaParcela = tipoParcelamento === 'recorrente' ? valorBebidasTotal : (valorBebidasTotal / numRepeticoes);
@@ -190,7 +191,6 @@ form.addEventListener('submit', (e) => {
         dataParcela.setMonth(dataParcela.getMonth() + i);
 
         let dataFormatada = dataParcela.toISOString().split('T')[0];
-
         let descFinal = descricaoOriginal;
         if (tipoParcelamento === 'recorrente') {
             descFinal = `${descricaoOriginal} 🔄`;
@@ -200,7 +200,7 @@ form.addEventListener('submit', (e) => {
 
         const { parteSil, parteCharles } = calcularDivisao(valorParcela, valorBebidaParcela, formaDivisao);
 
-        const novoLancamento = {
+        db.collection("lancamentos").add({
             id: baseId + i,
             grupoId: baseId,
             data: dataFormatada,
@@ -213,24 +213,40 @@ form.addEventListener('submit', (e) => {
             parteSil,
             parteCharles,
             isRecorrente: tipoParcelamento === 'recorrente'
-        };
-
-        // Salva direto no banco de dados na nuvem (Firebase)
-        db.collection("lancamentos").add(novoLancamento);
+        });
     }
 
     form.reset();
     document.getElementById('data').valueAsDate = new Date();
 });
 
-// Excluir Lançamento na Nuvem
+// Submit Receita
+if (formReceita) {
+    formReceita.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pessoa = document.getElementById('receita-pessoa').value;
+        const salario = parseFloat(document.getElementById('receita-salario').value) || 0;
+        const outros = parseFloat(document.getElementById('receita-outros').value) || 0;
+        const mesAno = filtroMesAno.value;
+
+        db.collection("receitas").add({
+            pessoa,
+            salario,
+            outros,
+            total: salario + outros,
+            mesAno
+        });
+
+        formReceita.reset();
+    });
+}
+
 function excluirLancamento(idDoc) {
     if (confirm('Deseja realmente excluir este lançamento?')) {
         db.collection("lancamentos").doc(idDoc).delete();
     }
 }
 
-// Calcular Liquidação (Quem deve para quem)
 function calcularAcerto(pagoPorSil, pagoPorCharles, devidoSil, devidoCharles) {
     let saldoSil = pagoPorSil - devidoSil;
     let saldoCharles = pagoPorCharles - devidoCharles;
@@ -250,30 +266,21 @@ function calcularAcerto(pagoPorSil, pagoPorCharles, devidoSil, devidoCharles) {
 
 function renderizarGrafico(lancamentosFiltrados) {
     const ctx = document.getElementById('grafico-categorias').getContext('2d');
-
-    // Agrupa gastos por categoria
     const categoriasTotais = {};
+
     lancamentosFiltrados.forEach(l => {
         categoriasTotais[l.categoria] = (categoriasTotais[l.categoria] || 0) + l.valorTotal;
     });
 
-    const labels = Object.keys(categoriasTotais);
-    const data = Object.values(categoriasTotais);
-
-    if (meuGrafico) {
-        meuGrafico.destroy();
-    }
+    if (meuGrafico) meuGrafico.destroy();
 
     meuGrafico = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
+            labels: Object.keys(categoriasTotais),
             datasets: [{
-                data: data,
-                backgroundColor: [
-                    '#2563eb', '#ec4899', '#10b981', '#f59e0b',
-                    '#8b5cf6', '#06b6d4', '#64748b', '#ef4444'
-                ]
+                data: Object.values(categoriasTotais),
+                backgroundColor: ['#2563eb', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#64748b', '#ef4444']
             }]
         },
         options: {
@@ -286,58 +293,22 @@ function renderizarGrafico(lancamentosFiltrados) {
     });
 }
 
-// Função para exportar os dados do mês em CSV
-function exportarCSV() {
-    const mesAnoSelecionado = filtroMesAno.value;
-    const lancamentosFiltrados = lancamentos.filter(l => l.data.startsWith(mesAnoSelecionado));
-
-    if (lancamentosFiltrados.length === 0) {
-        alert('Nenhum lançamento no mês para exportar!');
-        return;
-    }
-
-    let csvContent = "data:text/csv;charset=utf-8,Data;Descricao;Categoria;Quem Pagou;Valor Total;Parte Sil;Parte Charles\n";
-
-    lancamentosFiltrados.forEach(l => {
-        const row = `${l.data};"${l.descricao}";${l.categoria};${l.pagoPor};${l.valorTotal.toFixed(2)};${l.parteSil.toFixed(2)};${l.parteCharles.toFixed(2)}`;
-        csvContent += row + "\n";
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Gastos_${mesAnoSelecionado}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Atualizar Tabela e Totais na Tela
 function salvarERenderizar() {
     lancamentos.sort((a, b) => new Date(b.data) - new Date(a.data));
     tabelaBody.innerHTML = '';
 
     const mesAnoSelecionado = filtroMesAno.value;
-
-    // Filtra os lançamentos pertencentes ao mês/ano selecionado
     const lancamentosFiltrados = lancamentos.filter(l => l.data && l.data.startsWith(mesAnoSelecionado));
 
-    let totalGeral = 0;
-    let totalDevidoSil = 0;
-    let totalDevidoCharles = 0;
-    let totalPagoSil = 0;
-    let totalPagoCharles = 0;
+    let totalGeral = 0, totalDevidoSil = 0, totalDevidoCharles = 0, totalPagoSil = 0, totalPagoCharles = 0;
 
     lancamentosFiltrados.forEach(l => {
         totalGeral += l.valorTotal;
         totalDevidoSil += l.parteSil;
         totalDevidoCharles += l.parteCharles;
 
-        if (l.pagoPor === 'Sil') {
-            totalPagoSil += l.valorTotal;
-        } else if (l.pagoPor === 'Charles') {
-            totalPagoCharles += l.valorTotal;
-        }
+        if (l.pagoPor === 'Sil') totalPagoSil += l.valorTotal;
+        else if (l.pagoPor === 'Charles') totalPagoCharles += l.valorTotal;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -357,6 +328,28 @@ function salvarERenderizar() {
     document.getElementById('resumo-sil').innerText = `R$ ${totalDevidoSil.toFixed(2)}`;
     document.getElementById('resumo-charles').innerText = `R$ ${totalDevidoCharles.toFixed(2)}`;
 
+    // Resumo da Receita / Sobra
+    const divResumoReceitas = document.getElementById('resumo-receitas-mes');
+    if (divResumoReceitas) {
+        const receitasMes = receitas.filter(r => r.mesAno === mesAnoSelecionado);
+        let totalEntradas = 0;
+        let detalheReceitas = '';
+
+        receitasMes.forEach(r => {
+            totalEntradas += r.total;
+            detalheReceitas += `${r.pessoa}: R$ ${r.total.toFixed(2)} | `;
+        });
+
+        let sobraGeral = totalEntradas - totalGeral;
+
+        divResumoReceitas.innerHTML = `
+            <div style="background: #e0f2fe; padding: 12px; border-radius: 6px; border-left: 4px solid #0284c7;">
+                <span>Entradas do Mês: <strong>R$ ${totalEntradas.toFixed(2)}</strong> (${detalheReceitas ? detalheReceitas.slice(0, -3) : 'Nenhuma cadastrada'})</span><br>
+                <span style="font-size: 1.05rem;">Saldo Sobrando: <strong style="color: ${sobraGeral >= 0 ? '#047857' : '#dc2626'}">R$ ${sobraGeral.toFixed(2)}</strong></span>
+            </div>
+        `;
+    }
+
     if (lancamentosFiltrados.length > 0) {
         calcularAcerto(totalPagoSil, totalPagoCharles, totalDevidoSil, totalDevidoCharles);
     } else {
@@ -370,7 +363,6 @@ function renderizarBotoesProjecao() {
     const containerBotoes = document.getElementById('botoes-projecao');
     if (!containerBotoes) return;
     containerBotoes.innerHTML = '';
-
     const hoje = new Date();
 
     for (let i = 0; i < 6; i++) {
@@ -386,72 +378,35 @@ function renderizarBotoesProjecao() {
         btn.type = 'button';
         btn.className = `btn-projecao-mes ${filtroMesAno.value === valorMesAno ? 'ativo' : ''}`;
         btn.innerText = nomeMes;
-
         btn.addEventListener('click', () => {
             filtroMesAno.value = valorMesAno;
             salvarERenderizar();
         });
-
         containerBotoes.appendChild(btn);
     }
 }
 
-const btnExportarJSON = document.getElementById('btn-exportar-json');
-const inputImportarJSON = document.getElementById('input-importar-json');
-const btnLimparTudo = document.getElementById('btn-limpar-tudo');
+if (btnExportar) btnExportar.addEventListener('click', exportarCSV);
 
-if (btnExportarJSON) {
-    btnExportarJSON.addEventListener('click', () => {
-        if (lancamentos.length === 0) {
-            alert('Não há dados para exportar no backup.');
-            return;
-        }
+function exportarCSV() {
+    const mesAnoSelecionado = filtroMesAno.value;
+    const lancamentosFiltrados = lancamentos.filter(l => l.data.startsWith(mesAnoSelecionado));
 
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lancamentos, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `Backup_ControleGastos_${new Date().toISOString().split('T')[0]}.json`);
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
+    if (lancamentosFiltrados.length === 0) {
+        alert('Nenhum lançamento no mês para exportar!');
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,Data;Descricao;Categoria;Quem Pagou;Valor Total;Parte Sil;Parte Charles\n";
+    lancamentosFiltrados.forEach(l => {
+        csvContent += `${l.data};"${l.descricao}";${l.categoria};${l.pagoPor};${l.valorTotal.toFixed(2)};${l.parteSil.toFixed(2)};${l.parteCharles.toFixed(2)}\n`;
     });
-}
 
-if (inputImportarJSON) {
-    inputImportarJSON.addEventListener('change', (event) => {
-        const fileReader = new FileReader();
-        fileReader.onload = (e) => {
-            try {
-                const dadosImportados = JSON.parse(e.target.result);
-                if (Array.isArray(dadosImportados)) {
-                    if (confirm(`Deseja importar ${dadosImportados.length} lançamentos? Isso irá enviar todos os dados para o banco.`)) {
-                        dadosImportados.forEach(item => {
-                            db.collection("lancamentos").add(item);
-                        });
-                        alert('Backup importado com sucesso para a nuvem!');
-                    }
-                } else {
-                    alert('Arquivo de backup inválido.');
-                }
-            } catch (err) {
-                alert('Erro ao ler o arquivo JSON de backup.');
-            }
-        };
-        if (event.target.files[0]) {
-            fileReader.readAsText(event.target.files[0]);
-        }
-    });
-}
-
-if (btnLimparTudo) {
-    btnLimparTudo.addEventListener('click', () => {
-        if (confirm('⚠️ TEM CERTEZA? Esta ação apagará TODOS os lançamentos registrados no banco de dados da nuvem!')) {
-            db.collection("lancamentos").get().then((snapshot) => {
-                snapshot.forEach((doc) => {
-                    doc.ref.delete();
-                });
-                alert('Todos os dados foram apagados da nuvem.');
-            });
-        }
-    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Gastos_${mesAnoSelecionado}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

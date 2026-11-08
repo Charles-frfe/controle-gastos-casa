@@ -36,47 +36,181 @@
       </section>
 
       <!-- Entradas / Salários -->
+      <!-- Seção Completa de Entradas e Folha de Pagamento -->
       <section class="card receita-card">
-        <h2>💵 Entradas / Salário do Mês</h2>
-        <form id="form-receita">
+        <h2>💵 Entradas & Folha de Pagamento</h2>
+
+        <!-- Seleção do Tipo de Entrada -->
+        <div style="display: flex; gap: 10px; margin-bottom: 15px">
+          <button
+            type="button"
+            id="tab-btn-holerite"
+            class="btn-secundario"
+            style="background: #0284c7; color: white"
+          >
+            📄 Cadastrar Holerite / Salário
+          </button>
+          <button type="button" id="tab-btn-extra" class="btn-secundario">
+            💸 Cadastrar Outra Entrada (Rendimento Extra)
+          </button>
+        </div>
+
+        <!-- Formulário 1: Holerite Detalhado -->
+        <form id="form-holerite">
           <div class="form-row">
             <div class="form-group">
-              <label for="receita-pessoa">Pessoa</label>
-              <select id="receita-pessoa" required>
+              <label for="holerite-pessoa">Pessoa</label>
+              <select id="holerite-pessoa" required>
                 <option value="Sil">Sil</option>
                 <option value="Charles">Charles</option>
               </select>
             </div>
             <div class="form-group">
-              <label for="receita-salario">Salário Líquido (R$)</label>
+              <label for="holerite-bruto">Salário Bruto / Proventos (R$)</label>
               <input
                 type="number"
                 step="0.01"
-                id="receita-salario"
-                placeholder="Ex: 2842.77"
+                id="holerite-bruto"
+                placeholder="0.00"
+                required
+              />
+            </div>
+          </div>
+
+          <div
+            style="
+              margin: 15px 0;
+              background: #f8fafc;
+              padding: 12px;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            "
+          >
+            <label style="font-weight: 600; color: #334155"
+              >🔻 Descontos em Folha</label
+            >
+            <div
+              id="lista-descontos-container"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-top: 8px;
+              "
+            >
+              <!-- Linha inicial de desconto -->
+              <div class="linha-desconto" style="display: flex; gap: 8px">
+                <input
+                  type="text"
+                  class="desc-nome"
+                  placeholder="Especificação (ex: INSS, Unimed, Lanchonete)"
+                  style="flex: 2"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  class="desc-valor"
+                  placeholder="Valor (R$)"
+                  style="flex: 1"
+                />
+                <button
+                  type="button"
+                  class="btn-remover-desconto"
+                  style="
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 0 10px;
+                    cursor: pointer;
+                  "
+                >
+                  x
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="btn-add-desconto"
+              style="
+                margin-top: 8px;
+                background: #64748b;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.85rem;
+              "
+            >
+              + Adicionar Outro Desconto
+            </button>
+          </div>
+
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 10px;
+            "
+          >
+            <div style="font-size: 1.1rem; font-weight: bold; color: #047857">
+              Salário Líquido Calculado:
+              <span id="holerite-liquido-preview">R$ 0,00</span>
+            </div>
+            <button
+              type="submit"
+              class="btn-salvar"
+              style="background: #10b981; width: auto; margin: 0"
+            >
+              Salvar Folha do Mês
+            </button>
+          </div>
+        </form>
+
+        <!-- Formulário 2: Outras Entradas Extras -->
+        <form id="form-entrada-extra" style="display: none">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="extra-pessoa">Pessoa</label>
+              <select id="extra-pessoa" required>
+                <option value="Sil">Sil</option>
+                <option value="Charles">Charles</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="extra-descricao">Descrição da Entrada</label>
+              <input
+                type="text"
+                id="extra-descricao"
+                placeholder="Ex: Venda de item, Freelance, Reembolso"
                 required
               />
             </div>
             <div class="form-group">
-              <label for="receita-outros">Outros Rendimentos (R$)</label>
+              <label for="extra-valor">Valor Recebido (R$)</label>
               <input
                 type="number"
                 step="0.01"
-                id="receita-outros"
-                placeholder="0.00 (opcional)"
+                id="extra-valor"
+                placeholder="0.00"
+                required
               />
             </div>
             <div class="form-group" style="justify-content: flex-end">
               <button
                 type="submit"
                 class="btn-salvar"
-                style="background: #10b981"
+                style="background: #10b981; margin: 0"
               >
-                Salvar Receita
+                Salvar Entrada Extra
               </button>
             </div>
           </div>
         </form>
+
         <div id="resumo-receitas-mes" style="margin-top: 15px"></div>
       </section>
 

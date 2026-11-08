@@ -410,3 +410,144 @@ function exportarCSV() {
     link.click();
     document.body.removeChild(link);
 }
+
+// ==========================================
+// MÓDULO DE HOLERITE E ENTRADAS EXTRAS
+// ==========================================
+const tabBtnHolerite = document.getElementById('tab-btn-holerite');
+const tabBtnExtra = document.getElementById('tab-btn-extra');
+const formHolerite = document.getElementById('form-holerite');
+const formEntradaExtra = document.getElementById('form-entrada-extra');
+
+const inputBruto = document.getElementById('holerite-bruto');
+const containerDescontos = document.getElementById('lista-descontos-container');
+const btnAddDesconto = document.getElementById('btn-add-desconto');
+const spanLiquidoPreview = document.getElementById('holerite-liquido-preview');
+
+// Alternar entre Holerite e Entradas Extras
+if (tabBtnHolerite && tabBtnExtra) {
+    tabBtnHolerite.addEventListener('click', () => {
+        formHolerite.style.display = 'block';
+        formEntradaExtra.style.display = 'none';
+        tabBtnHolerite.style.background = '#0284c7';
+        tabBtnHolerite.style.color = 'white';
+        tabBtnExtra.style.background = '#e2e8f0';
+        tabBtnExtra.style.color = '#334155';
+    });
+
+    tabBtnExtra.addEventListener('click', () => {
+        formHolerite.style.display = 'none';
+        formEntradaExtra.style.display = 'flex';
+        tabBtnExtra.style.background = '#0284c7';
+        tabBtnExtra.style.color = 'white';
+        tabBtnHolerite.style.background = '#e2e8f0';
+        tabBtnHolerite.style.color = '#334155';
+    });
+}
+
+// Adicionar nova linha de desconto
+if (btnAddDesconto) {
+    btnAddDesconto.addEventListener('click', () => {
+        const novaLinha = document.createElement('div');
+        novaLinha.className = 'linha-desconto';
+        novaLinha.style.cssText = 'display: flex; gap: 8px;';
+        novaLinha.innerHTML = `
+            <input type="text" class="desc-nome" placeholder="Especificação" style="flex: 2;">
+            <input type="number" step="0.01" class="desc-valor" placeholder="Valor (R$)" style="flex: 1;">
+            <button type="button" class="btn-remover-desconto" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 0 10px; cursor: pointer;">x</button>
+        `;
+        containerDescontos.appendChild(novaLinha);
+        adicionarListenersDescontos();
+    });
+}
+
+// Remover linha de desconto e recadastrar listeners de cálculo
+function adicionarListenersDescontos() {
+    document.querySelectorAll('.btn-remover-desconto').forEach(btn => {
+        btn.onclick = (e) => {
+            if (document.querySelectorAll('.linha-desconto').length > 1) {
+                e.target.parentElement.remove();
+                calcularLiquidoHolerite();
+            }
+        };
+    });
+
+    document.querySelectorAll('.desc-valor').forEach(input => {
+        input.oninput = calcularLiquidoHolerite;
+    });
+}
+adicionarListenersDescontos();
+
+if (inputBruto) inputBruto.oninput = calcularLiquidoHolerite;
+
+// Calcular Líquido em Tempo Real
+function calcularLiquidoHolerite() {
+    const bruto = parseFloat(inputBruto.value) || 0;
+    let totalDescontos = 0;
+
+    document.querySelectorAll('.desc-valor').forEach(input => {
+        totalDescontos += parseFloat(input.value) || 0;
+    });
+
+    const liquido = bruto - totalDescontos;
+    if (spanLiquidoPreview) {
+        spanLiquidoPreview.textContent = `R$ ${liquido.toFixed(2)}`;
+    }
+    return { bruto, totalDescontos, liquido };
+}
+
+// Submit do Holerite Detalhado
+if (formHolerite) {
+    formHolerite.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pessoa = document.getElementById('holerite-pessoa').value;
+        const { bruto, totalDescontos, liquido } = calcularLiquidoHolerite();
+        const mesAno = filtroMesAno.value;
+
+        const descontosDetalhado = [];
+        document.querySelectorAll('.linha-desconto').forEach(linha => {
+            const nome = linha.querySelector('.desc-nome').value.trim();
+            const valor = parseFloat(linha.querySelector('.desc-valor').value) || 0;
+            if (nome && valor > 0) {
+                descontosDetalhado.push({ nome, valor });
+            }
+        });
+
+        db.collection("receitas").add({
+            tipo: "Holerite",
+            pessoa,
+            salarioBruto: bruto,
+            descontos: descontosDetalhado,
+            totalDescontos,
+            salarioLiquido: liquido,
+            total: liquido,
+            mesAno,
+            dataRegistro: new Date().toISOString()
+        });
+
+        formHolerite.reset();
+        calcularLiquidoHolerite();
+    });
+}
+
+// Submit de Entrada Extra
+if (formEntradaExtra) {
+    formEntradaExtra.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pessoa = document.getElementById('extra-pessoa').value;
+        const descricao = document.getElementById('extra-descricao').value;
+        const valor = parseFloat(document.getElementById('extra-valor').value) || 0;
+        const mesAno = filtroMesAno.value;
+
+        db.collection("receitas").add({
+            tipo: "Extra",
+            pessoa,
+            descricao,
+            total: valor,
+            mesAno,
+            dataRegistro: new Date().toISOString()
+        });
+
+        formEntradaExtra.reset();
+    });
+}

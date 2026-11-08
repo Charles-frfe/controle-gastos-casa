@@ -30,6 +30,21 @@ header p {
     color: #64748b;
 }
 
+#status-app {
+    display: inline-block;
+    margin: 8px 0 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 0.85rem;
+}
+
+#status-app.erro {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
 .card {
     background: #ffffff;
     border-radius: 12px;

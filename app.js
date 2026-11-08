@@ -209,7 +209,7 @@ function calcularDivisao(valorTotal, valorBebidas, formaDivisao) {
     let parteSil = 0;
     let parteCharles = 0;
 
-    if (formaDivisao === 'MeioAMeio') {
+    if (formaDivisao === 'MeioAMeio' || formaDivisao === 'Mercado') {
         const metadeSil = Math.floor(valorLiquido / 2);
         parteSil = metadeSil / 100;
         parteCharles = (valorLiquido - metadeSil + bebidasCentavos) / 100;
@@ -236,6 +236,11 @@ form.addEventListener('submit', (e) => {
     const valorBebidasTotal = parseFloat(document.getElementById('valor-bebidas').value) || 0;
     const pagoPor = document.getElementById('pago-por').value;
     const formaDivisao = document.querySelector('input[name="divisao"]:checked').value;
+
+    if (formaDivisao === 'Mercado' && valorBebidasTotal <= 0) {
+        alert('Informe o valor de bebidas/outros para usar a divisão de mercado.');
+        return;
+    }
 
     if (!Number.isFinite(valorTotalCompra) || valorTotalCompra <= 0 || valorBebidasTotal < 0 || valorBebidasTotal > valorTotalCompra) {
         alert('Informe um valor total positivo e uma dedução entre R$ 0,00 e o valor total.');

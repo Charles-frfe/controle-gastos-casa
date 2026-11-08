@@ -83,50 +83,6 @@
       <!-- Formulário de Lançamento de Gastos -->
       <section class="card">
         <h2>Novo Lançamento</h2>
-        <!-- Botão para Leitura Inteligente via IA -->
-        <div
-          style="
-            margin-bottom: 15px;
-            background: #eff6ff;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px dashed #3b82f6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-          "
-        >
-          <div>
-            <strong style="color: #1e40af"
-              >🤖 Leitura Automática por Foto / PDF</strong
-            >
-            <p style="margin: 2px 0 0 0; font-size: 0.85rem; color: #475569">
-              Tire foto do recibo/cupom ou envie o PDF do holerite
-            </p>
-          </div>
-          <label
-            for="input-foto-ocr"
-            class="btn-salvar"
-            style="
-              margin: 0;
-              background: #2563eb;
-              cursor: pointer;
-              width: auto;
-              padding: 8px 16px;
-              font-size: 0.9rem;
-            "
-          >
-            📷 Enviar Foto / PDF
-          </label>
-          <input
-            type="file"
-            id="input-foto-ocr"
-            accept="image/*,application/pdf"
-            style="display: none"
-          />
-        </div>
         <form id="form-gastos">
           <div class="form-row">
             <div class="form-group">
@@ -375,83 +331,6 @@
           id="lista-categorias-modal"
           style="list-style: none; padding: 0"
         ></ul>
-      </div>
-    </div>
-    <!-- Modal de Revisão do OCR / IA -->
-    <div
-      id="modal-ocr"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        z-index: 1050;
-        justify-content: center;
-        align-items: center;
-      "
-    >
-      <div
-        style="
-          background: white;
-          padding: 24px;
-          border-radius: 12px;
-          width: 95%;
-          max-width: 550px;
-          max-height: 85vh;
-          overflow-y: auto;
-        "
-      >
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-          "
-        >
-          <h3 style="margin: 0; color: #1e293b">
-            🤖 Itens Identificados pela IA
-          </h3>
-          <button
-            id="btn-fechar-ocr"
-            style="
-              background: none;
-              border: none;
-              font-size: 1.2rem;
-              cursor: pointer;
-            "
-          >
-            ✖
-          </button>
-        </div>
-
-        <p style="font-size: 0.9rem; color: #64748b; margin-top: 0">
-          Revise a atribuição de cada item antes de salvar no banco de dados:
-        </p>
-
-        <div
-          id="status-processando-ocr"
-          style="display: none; text-align: center; padding: 20px"
-        >
-          <p style="font-weight: 600; color: #2563eb">
-            ⏳ A analisar documento com Inteligência Artificial...
-          </p>
-        </div>
-
-        <div id="conteudo-resultado-ocr">
-          <div id="lista-itens-ocr" style="margin-bottom: 15px"></div>
-          <button
-            type="button"
-            id="btn-confirmar-ocr"
-            class="btn-salvar"
-            style="background: #10b981"
-          >
-            ✅ Salvar Lançamentos Selecionados
-          </button>
-        </div>
       </div>
     </div>
 

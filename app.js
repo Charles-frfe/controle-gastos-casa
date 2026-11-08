@@ -534,129 +534,104 @@ function exportarCSV() {
     setTimeout(() => URL.revokeObjectURL(encodedUri), 1000);
 }
 
-// Abas de holerite e rendimentos extras.
-const btnTabHolerite = document.getElementById('tab-btn-holerite');
-const btnTabExtra = document.getElementById('tab-btn-extra');
-const formAbaHolerite = document.getElementById('form-holerite');
-if (btnTabHolerite && btnTabExtra && formAbaHolerite && formEntradaExtra) {
-    btnTabHolerite.addEventListener('click', () => {
-        formAbaHolerite.style.display = '';
+// Alternar abas: Holerite vs Entrada Extra
+const tabBtnHolerite = document.getElementById('tab-btn-holerite');
+const tabBtnExtra = document.getElementById('tab-btn-extra');
+const formHolerite = document.getElementById('form-holerite');
+const formEntradaExtra = document.getElementById('form-entrada-extra');
+
+if (tabBtnHolerite && tabBtnExtra) {
+    tabBtnHolerite.addEventListener('click', () => {
+        formHolerite.style.display = 'block';
         formEntradaExtra.style.display = 'none';
-        btnTabHolerite.setAttribute('aria-pressed', 'true');
-        btnTabExtra.setAttribute('aria-pressed', 'false');
+        tabBtnHolerite.style.background = '#0284c7';
+        tabBtnHolerite.style.color = 'white';
+        tabBtnExtra.style.background = '#e2e8f0';
+        tabBtnExtra.style.color = '#334155';
     });
-    btnTabExtra.addEventListener('click', () => {
-        formAbaHolerite.style.display = 'none';
-        formEntradaExtra.style.display = '';
-        btnTabHolerite.setAttribute('aria-pressed', 'false');
-        btnTabExtra.setAttribute('aria-pressed', 'true');
+
+    tabBtnExtra.addEventListener('click', () => {
+        formHolerite.style.display = 'none';
+        formEntradaExtra.style.display = 'block';
+        tabBtnExtra.style.background = '#0284c7';
+        tabBtnExtra.style.color = 'white';
+        tabBtnHolerite.style.background = '#e2e8f0';
+        tabBtnHolerite.style.color = '#334155';
+    });
+}
+// ==========================================
+// BOTOES DO RODAPÉ (BACKUP, RESTAURAR E LIMPAR)
+// ==========================================
+const btnExportarJSON = document.getElementById('btn-exportar-json');
+const inputImportarJSON = document.getElementById('input-importar-json');
+const btnLimparTudo = document.getElementById('btn-limpar-tudo');
+
+// 💾 Fazer Backup (Exportar todos os dados da nuvem para JSON)
+if (btnExportarJSON) {
+    btnExportarJSON.addEventListener('click', () => {
+        if (lancamentos.length === 0) {
+            alert('Não há lançamentos registrados no banco para exportar.');
+            return;
+        }
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lancamentos, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `Backup_GastosCasa_${new Date().toISOString().split('T')[0]}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
     });
 }
 
-// Backup completo das três coleções usadas pelo aplicativo.
-const colecoesBackup = ['lancamentos', 'receitas', 'categorias'];
-if (btnExportarJson) btnExportarJson.addEventListener('click', exportarBackupJson);
-if (inputImportarJson) inputImportarJson.addEventListener('change', importarBackupJson);
-if (btnLimparTudo) btnLimparTudo.addEventListener('click', limparTodosOsDados);
-
-async function exportarBackupJson() {
-    try {
-        const colecoes = {};
-        for (const nome of colecoesBackup) {
-            const snapshot = await db.collection(nome).get();
-            colecoes[nome] = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+// 📂 Restaurar Backup (Importar arquivo JSON para o Firebase)
+if (inputImportarJSON) {
+    inputImportarJSON.addEventListener('change', (event) => {
+        const fileReader = new FileReader();
+        fileReader.onload = (e) => {
+            try {
+                const dadosImportados = JSON.parse(e.target.result);
+                if (Array.isArray(dadosImportados)) {
+                    if (confirm(`Deseja importar ${dadosImportados.length} lançamentos? Eles serão salvos no seu banco de dados na nuvem.`)) {
+                        dadosImportados.forEach(item => {
+                            // Remove IDs locais antigos para não conflitar com o Firebase
+                            delete item.idDoc;
+                            db.collection("lancamentos").add(item);
+                        });
+                        alert('Backup importado com sucesso para a nuvem!');
+                    }
+                } else {
+                    alert('Arquivo de backup inválido.');
+                }
+            } catch (err) {
+                alert('Erro ao ler o arquivo JSON de backup.');
+            }
+        };
+        if (event.target.files[0]) {
+            fileReader.readAsText(event.target.files[0]);
         }
-        const conteudo = JSON.stringify({ formato: 'controle-gastos-casa', versao: 1, exportadoEm: new Date().toISOString(), colecoes }, null, 2);
-        baixarArquivo(conteudo, `backup-gastos-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
-    } catch (error) {
-        alert(`Não foi possível criar o backup: ${error.message}`);
-    }
+    });
 }
 
-function baixarArquivo(conteudo, nome, tipo) {
-    const url = URL.createObjectURL(new Blob([conteudo], { type }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = nome;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function importarBackupJson(event) {
-    const arquivo = event.target.files?.[0];
-    if (!arquivo) return;
-    try {
-        const backup = JSON.parse(await arquivo.text());
-        if (backup.formato !== 'controle-gastos-casa' || !backup.colecoes || typeof backup.colecoes !== 'object') {
-            throw new Error('O arquivo não parece ser um backup deste aplicativo.');
-        }
-        const dados = {};
-        let totalDocumentos = 0;
-        for (const nome of colecoesBackup) {
-            const itens = backup.colecoes[nome];
-            if (!Array.isArray(itens)) throw new Error(`A coleção ${nome} tem formato inválido.`);
-            dados[nome] = itens.map((item) => {
-                if (!item || typeof item !== 'object' || !item.data || typeof item.data !== 'object' || Array.isArray(item.data)) {
-                    throw new Error(`Há um registro inválido na coleção ${nome}.`);
-                }
-                if (item.id !== undefined && (typeof item.id !== 'string' || !item.id.trim() || item.id.includes('/'))) {
-                    throw new Error(`Há um identificador inválido na coleção ${nome}.`);
-                }
-                return item;
+// ⚠️ Limpar Todos os Dados da Nuvem
+if (btnLimparTudo) {
+    btnLimparTudo.addEventListener('click', () => {
+        if (confirm('⚠️ TEM CERTEZA? Esta ação apagará TODOS os lançamentos registrados na nuvem (Firebase)!')) {
+            db.collection("lancamentos").get().then((snapshot) => {
+                const batch = db.batch();
+                snapshot.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                return batch.commit();
+            }).then(() => {
+                alert('Todos os dados foram removidos da nuvem com sucesso.');
+            }).catch(err => {
+                alert('Erro ao apagar dados: ' + err.message);
             });
-            totalDocumentos += dados[nome].length;
         }
-        if (totalDocumentos > 10000) throw new Error('O backup excede o limite de 10.000 registros por restauração.');
-        if (!confirm(`A restauração substituirá os dados atuais por ${totalDocumentos} registros do arquivo. Faça um backup atual antes de continuar. Deseja prosseguir?`)) return;
-
-        restaurandoBackup = true;
-        for (const nome of colecoesBackup) {
-            const atual = await db.collection(nome).get();
-            await confirmarEmLotes(atual.docs.map((doc) => ({ tipo: 'delete', ref: doc.ref })));
-            const gravacoes = dados[nome].map((item) => ({
-                tipo: 'set',
-                ref: item.id ? db.collection(nome).doc(item.id) : db.collection(nome).doc(),
-                data: item.data
-            }));
-            await confirmarEmLotes(gravacoes);
-        }
-        restaurandoBackup = false;
-        if (!dados.categorias.length) await inicializarCategoriasPadraoSeVazio();
-        alert('Backup restaurado.');
-    } catch (error) {
-        restaurandoBackup = false;
-        alert(`Não foi possível restaurar o backup: ${error.message}`);
-    } finally {
-        inputImportarJson.value = '';
-    }
+    });
 }
 
-async function limparTodosOsDados() {
-    if (!confirm('Isso excluirá permanentemente receitas, lançamentos e categorias do Firebase. Faça um backup antes. Deseja continuar?')) return;
-    try {
-        for (const nome of colecoesBackup) {
-            const snapshot = await db.collection(nome).get();
-            await confirmarEmLotes(snapshot.docs.map((doc) => ({ tipo: 'delete', ref: doc.ref })));
-        }
-        await inicializarCategoriasPadraoSeVazio();
-        alert('Dados excluídos. As categorias padrão serão criadas novamente.');
-    } catch (error) {
-        alert(`Não foi possível concluir a exclusão: ${error.message}`);
-    }
-}
-
-async function confirmarEmLotes(operacoes) {
-    for (let inicio = 0; inicio < operacoes.length; inicio += 450) {
-        const batch = db.batch();
-        operacoes.slice(inicio, inicio + 450).forEach((operacao) => {
-            if (operacao.tipo === 'delete') batch.delete(operacao.ref);
-            else batch.set(operacao.ref, operacao.data);
-        });
-        await batch.commit();
-    }
-}
 // ==========================================
 // MÓDULO DE HOLERITE (PROVENTOS & DESCONTOS)
 // ==========================================

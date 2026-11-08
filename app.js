@@ -410,113 +410,129 @@ function exportarCSV() {
     link.click();
     document.body.removeChild(link);
 }
-
 // ==========================================
-// MÓDULO DE HOLERITE E ENTRADAS EXTRAS
+// MÓDULO DE HOLERITE (PROVENTOS & DESCONTOS)
 // ==========================================
-const tabBtnHolerite = document.getElementById('tab-btn-holerite');
-const tabBtnExtra = document.getElementById('tab-btn-extra');
-const formHolerite = document.getElementById('form-holerite');
-const formEntradaExtra = document.getElementById('form-entrada-extra');
+const containerProventos = document.getElementById('lista-proventos-container');
+const btnAddProvento = document.getElementById('btn-add-provento');
 
-const inputBruto = document.getElementById('holerite-bruto');
 const containerDescontos = document.getElementById('lista-descontos-container');
 const btnAddDesconto = document.getElementById('btn-add-desconto');
+
+const spanTotalProventos = document.getElementById('preview-total-proventos');
+const spanTotalDescontos = document.getElementById('preview-total-descontos');
 const spanLiquidoPreview = document.getElementById('holerite-liquido-preview');
 
-// Alternar entre Holerite e Entradas Extras
-if (tabBtnHolerite && tabBtnExtra) {
-    tabBtnHolerite.addEventListener('click', () => {
-        formHolerite.style.display = 'block';
-        formEntradaExtra.style.display = 'none';
-        tabBtnHolerite.style.background = '#0284c7';
-        tabBtnHolerite.style.color = 'white';
-        tabBtnExtra.style.background = '#e2e8f0';
-        tabBtnExtra.style.color = '#334155';
-    });
-
-    tabBtnExtra.addEventListener('click', () => {
-        formHolerite.style.display = 'none';
-        formEntradaExtra.style.display = 'flex';
-        tabBtnExtra.style.background = '#0284c7';
-        tabBtnExtra.style.color = 'white';
-        tabBtnHolerite.style.background = '#e2e8f0';
-        tabBtnHolerite.style.color = '#334155';
+// 1. Adicionar nova linha de Provento
+if (btnAddProvento) {
+    btnAddProvento.addEventListener('click', () => {
+        const novaLinha = document.createElement('div');
+        novaLinha.className = 'linha-provento';
+        novaLinha.style.cssText = 'display: flex; gap: 8px;';
+        novaLinha.innerHTML = `
+            <input type="text" class="prov-nome" placeholder="Especificação (ex: Horas Extras)" style="flex: 2;">
+            <input type="number" step="0.01" class="prov-valor" placeholder="Valor (R$)" style="flex: 1;">
+            <button type="button" class="btn-remover-provento" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 0 10px; cursor: pointer;">x</button>
+        `;
+        containerProventos.appendChild(novaLinha);
+        adicionarListenersHolerite();
     });
 }
 
-// Adicionar nova linha de desconto
+// 2. Adicionar nova linha de Desconto
 if (btnAddDesconto) {
     btnAddDesconto.addEventListener('click', () => {
         const novaLinha = document.createElement('div');
         novaLinha.className = 'linha-desconto';
         novaLinha.style.cssText = 'display: flex; gap: 8px;';
         novaLinha.innerHTML = `
-            <input type="text" class="desc-nome" placeholder="Especificação" style="flex: 2;">
+            <input type="text" class="desc-nome" placeholder="Especificação (ex: INSS, Unimed)" style="flex: 2;">
             <input type="number" step="0.01" class="desc-valor" placeholder="Valor (R$)" style="flex: 1;">
             <button type="button" class="btn-remover-desconto" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 0 10px; cursor: pointer;">x</button>
         `;
         containerDescontos.appendChild(novaLinha);
-        adicionarListenersDescontos();
+        adicionarListenersHolerite();
     });
 }
 
-// Remover linha de desconto e recadastrar listeners de cálculo
-function adicionarListenersDescontos() {
-    document.querySelectorAll('.btn-remover-desconto').forEach(btn => {
+// 3. Atualizar Listeners de remoção e recálculo
+function adicionarListenersHolerite() {
+    document.querySelectorAll('.btn-remover-provento').forEach(btn => {
         btn.onclick = (e) => {
-            if (document.querySelectorAll('.linha-desconto').length > 1) {
+            if (document.querySelectorAll('.linha-provento').length > 1) {
                 e.target.parentElement.remove();
-                calcularLiquidoHolerite();
+                calcularHolerite();
             }
         };
     });
 
-    document.querySelectorAll('.desc-valor').forEach(input => {
-        input.oninput = calcularLiquidoHolerite;
+    document.querySelectorAll('.btn-remover-desconto').forEach(btn => {
+        btn.onclick = (e) => {
+            if (document.querySelectorAll('.linha-desconto').length > 1) {
+                e.target.parentElement.remove();
+                calcularHolerite();
+            }
+        };
+    });
+
+    document.querySelectorAll('.prov-valor, .desc-valor').forEach(input => {
+        input.oninput = calcularHolerite;
     });
 }
-adicionarListenersDescontos();
+adicionarListenersHolerite();
 
-if (inputBruto) inputBruto.oninput = calcularLiquidoHolerite;
-
-// Calcular Líquido em Tempo Real
-function calcularLiquidoHolerite() {
-    const bruto = parseFloat(inputBruto.value) || 0;
+// 4. Calcular Valores e Mostrar na Tela
+function calcularHolerite() {
+    let totalProventos = 0;
     let totalDescontos = 0;
+
+    document.querySelectorAll('.prov-valor').forEach(input => {
+        totalProventos += parseFloat(input.value) || 0;
+    });
 
     document.querySelectorAll('.desc-valor').forEach(input => {
         totalDescontos += parseFloat(input.value) || 0;
     });
 
-    const liquido = bruto - totalDescontos;
-    if (spanLiquidoPreview) {
-        spanLiquidoPreview.textContent = `R$ ${liquido.toFixed(2)}`;
-    }
-    return { bruto, totalDescontos, liquido };
+    const liquido = totalProventos - totalDescontos;
+
+    if (spanTotalProventos) spanTotalProventos.textContent = `R$ ${totalProventos.toFixed(2)}`;
+    if (spanTotalDescontos) spanTotalDescontos.textContent = `R$ ${totalDescontos.toFixed(2)}`;
+    if (spanLiquidoPreview) spanLiquidoPreview.textContent = `R$ ${liquido.toFixed(2)}`;
+
+    return { totalProventos, totalDescontos, liquido };
 }
 
-// Submit do Holerite Detalhado
+// 5. Submit da Folha do Mês no Firebase
+const formHolerite = document.getElementById('form-holerite');
 if (formHolerite) {
     formHolerite.addEventListener('submit', (e) => {
         e.preventDefault();
         const pessoa = document.getElementById('holerite-pessoa').value;
-        const { bruto, totalDescontos, liquido } = calcularLiquidoHolerite();
+        const { totalProventos, totalDescontos, liquido } = calcularHolerite();
         const mesAno = filtroMesAno.value;
 
+        // Captura a lista individual de Proventos
+        const proventosDetalhado = [];
+        document.querySelectorAll('.linha-provento').forEach(linha => {
+            const nome = linha.querySelector('.prov-nome').value.trim();
+            const valor = parseFloat(linha.querySelector('.prov-valor').value) || 0;
+            if (nome && valor > 0) proventosDetalhado.push({ nome, valor });
+        });
+
+        // Captura a lista individual de Descontos
         const descontosDetalhado = [];
         document.querySelectorAll('.linha-desconto').forEach(linha => {
             const nome = linha.querySelector('.desc-nome').value.trim();
             const valor = parseFloat(linha.querySelector('.desc-valor').value) || 0;
-            if (nome && valor > 0) {
-                descontosDetalhado.push({ nome, valor });
-            }
+            if (nome && valor > 0) descontosDetalhado.push({ nome, valor });
         });
 
         db.collection("receitas").add({
             tipo: "Holerite",
             pessoa,
-            salarioBruto: bruto,
+            proventos: proventosDetalhado,
+            totalProventos,
             descontos: descontosDetalhado,
             totalDescontos,
             salarioLiquido: liquido,
@@ -526,28 +542,7 @@ if (formHolerite) {
         });
 
         formHolerite.reset();
-        calcularLiquidoHolerite();
-    });
-}
-
-// Submit de Entrada Extra
-if (formEntradaExtra) {
-    formEntradaExtra.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const pessoa = document.getElementById('extra-pessoa').value;
-        const descricao = document.getElementById('extra-descricao').value;
-        const valor = parseFloat(document.getElementById('extra-valor').value) || 0;
-        const mesAno = filtroMesAno.value;
-
-        db.collection("receitas").add({
-            tipo: "Extra",
-            pessoa,
-            descricao,
-            total: valor,
-            mesAno,
-            dataRegistro: new Date().toISOString()
-        });
-
-        formEntradaExtra.reset();
+        calcularHolerite();
+        alert('Folha de pagamento cadastrada com sucesso!');
     });
 }
